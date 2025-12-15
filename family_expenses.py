@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from src import splitwise_client, dashboard, gdrive, email_sender, stats
+from src import splitwise_client, dashboard, gdrive, email_sender, stats, firebase
 from src.config import app as app_config
 from src.config import gdrive as gdrive_config, email as email_config
 
@@ -253,44 +253,36 @@ def main() -> None:
         dashboard.generate(processed_df, html_path, summary=summary)
         log_verbose(f"Dashboard generated with {len(processed_df)} expenses")
         
-        # Step 6: Upload to Google Drive (always, when configured)
-        dashboard_link = None
-        
+        # Step 6: Upload to Google Drive for backup (always, when configured)
         if gdrive_config.is_configured:
             files_to_upload = [
                 (json_path, "expenses.json"),
                 (csv_path, "expenses.csv"),
                 (html_path, "expenses_dashboard.html"),
             ]
-            file_ids = gdrive.upload_files(files_to_upload, timestamp)
-            log_verbose("Files uploaded to Google Drive")
-            
-            # Get the dashboard file ID for sharing and linking
-            dashboard_file_id = file_ids.get("expenses_dashboard")
-            if dashboard_file_id:
-                dashboard_link = gdrive.get_view_link(dashboard_file_id)
-                
-                # Share with email recipients if email is enabled
-                if args.email and email_config.is_configured:
-                    recipient_list = [
-                        e.strip() for e in email_config.recipient_email.split(",")
-                    ]
-                    log_verbose(f"Sharing dashboard with {len(recipient_list)} recipient(s)")
-                    gdrive.share_with_emails(dashboard_file_id, recipient_list)
+            gdrive.upload_files(files_to_upload, timestamp)
+            log_verbose("Files uploaded to Google Drive (backup)")
         else:
-            log_verbose("Google Drive not configured - skipping upload")
+            log_verbose("Google Drive not configured - skipping backup")
         
-        # Step 7: Send email (when --email flag is passed)
+        # Step 7: Deploy to Firebase Hosting (the dashboard URL for email)
+        firebase_url = None
+        firebase_url = firebase.deploy_dashboard(html_path)
+        if firebase_url:
+            log_verbose(f"Dashboard deployed to Firebase: {firebase_url}")
+        else:
+            log_verbose("Firebase deployment skipped or failed")
+        
+        # Step 8: Send email (when --email flag is passed)
         if args.email:
-            if not gdrive_config.is_configured:
-                log_info("WARNING: Email requires Google Drive - skipping email")
-            elif not email_config.is_configured:
+            if not email_config.is_configured:
                 log_verbose("Email not configured - skipping")
-            elif dashboard_link:
-                email_sender.send_dashboard(dashboard_link, summary)
-                log_verbose("Email sent")
+            elif firebase_url:
+                # Use Firebase URL (auth-protected live dashboard)
+                email_sender.send_dashboard(firebase_url, summary)
+                log_verbose("Email sent with Firebase dashboard link")
             else:
-                log_info("WARNING: No dashboard link available - skipping email")
+                log_info("WARNING: No Firebase URL available - skipping email")
         
         # Show local file path if in local mode
         if args.local:

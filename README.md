@@ -9,9 +9,147 @@ Track your Splitwise expenses with an interactive dashboard, automatic cloud bac
 
 This application connects to your Splitwise account, fetches your expense history, and generates:
 
-- **Interactive HTML Dashboard** — Charts, filters, and monthly summaries
-- **Complete Data Backup** — JSON and CSV files with all your Splitwise data
-- **Email Reports** — Monthly summaries sent directly to your inbox
+- **Interactive Web Dashboard** — Live, auth-protected dashboard hosted on Firebase
+- **Complete Data Backup** — JSON and CSV files backed up to Google Drive
+- **Email Reports** — Monthly summaries with a link to the live dashboard
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph DataSources[Data Sources]
+        Splitwise[Splitwise API]
+        DriveCache[Google Drive Cache]
+        LocalCache[Local Cache]
+    end
+
+    subgraph Processing[Python Script]
+        Fetch[Fetch Expenses]
+        Process[Process Data]
+        Generate[Generate Dashboard HTML]
+        Stats[Calculate Statistics]
+    end
+
+    subgraph Storage[Storage]
+        GDrive[Google Drive]
+        Firebase[Firebase Hosting]
+        LocalFiles[Local output/]
+    end
+
+    subgraph Delivery[Delivery]
+        Email[Email Summary]
+        WebApp[Live Dashboard]
+    end
+
+    subgraph Auth[Authentication]
+        FirebaseAuth[Firebase Auth]
+        AllowedEmails[RECIPIENT_EMAIL]
+    end
+
+    Splitwise -->|Fresh data| Fetch
+    DriveCache -->|--local priority 1| Fetch
+    LocalCache -->|--local priority 2| Fetch
+    
+    Fetch --> Process
+    Process --> Generate
+    Process --> Stats
+    Stats --> Generate
+    Stats --> Email
+    
+    Generate --> GDrive
+    Generate --> Firebase
+    Generate -->|--local| LocalFiles
+    
+    Firebase --> WebApp
+    WebApp --> FirebaseAuth
+    FirebaseAuth -->|Check| AllowedEmails
+    
+    Firebase -->|URL| Email
+```
+
+### Data Flow
+
+| Step | Action | Output |
+|------|--------|--------|
+| 1 | Fetch expenses from Splitwise (or cache) | Raw DataFrame with all records |
+| 2 | Process data for dashboard | Filtered DataFrame (expenses only) |
+| 3 | Calculate statistics | Monthly summary, trends, top categories |
+| 4 | Generate HTML dashboard | Interactive Plotly charts + data table |
+| 5 | Upload to Google Drive | `expenses.json`, `expenses.csv`, `expenses_dashboard.html` |
+| 6 | Deploy to Firebase | Dashboard embedded in auth-protected page |
+| 7 | Send email (if `--email`) | Summary with Firebase URL |
+
+### Deployment Behavior
+
+Each script run **completely replaces** the previously deployed dashboard:
+
+1. New dashboard HTML is generated with current data
+2. Dashboard is base64-encoded and embedded in `index.html`
+3. Firebase deploys the new `index.html`, overwriting the previous version
+4. Old dashboard is no longer accessible — only the latest version exists
+
+This ensures:
+- No stale data accumulates on Firebase
+- Recipients always see the most recent dashboard
+- Storage usage remains constant (single deployment)
+
+---
+
+## Security Model
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Firebase as Firebase Hosting
+    participant Auth as Firebase Auth
+    participant Dashboard as Dashboard Content
+
+    User->>Firebase: Visit URL
+    Firebase->>User: Login page
+    User->>Auth: Sign in with Google
+    Auth->>Auth: Verify Google account
+    Auth->>Firebase: Return user email
+    Firebase->>Firebase: Check ALLOWED_EMAILS
+    alt Email authorized
+        Firebase->>Dashboard: Decode base64 content
+        Dashboard->>User: Display dashboard
+    else Email not authorized
+        Firebase->>User: Access denied
+        Firebase->>Auth: Sign out user
+    end
+```
+
+### Security Layers
+
+| Layer | Protection | Implementation |
+|-------|------------|----------------|
+| **Authentication** | Google OAuth required | Firebase Authentication |
+| **Authorization** | Email allowlist | `ALLOWED_EMAILS` array in deployed HTML |
+| **Data Protection** | Dashboard not directly accessible | Base64 encoded, embedded in auth page |
+| **No Direct URL** | `dashboard.html` doesn't exist | Single `index.html` with embedded content |
+| **Secrets** | API keys never exposed | Environment variables / GitHub Secrets |
+| **Transport** | HTTPS enforced | Firebase Hosting default |
+
+### What's Protected
+
+| Asset | Location | Access Control |
+|-------|----------|----------------|
+| Live dashboard | Firebase (`index.html`) | Google Auth + email allowlist |
+| Backup files | Google Drive | Private folder (only owner) |
+| Expense data | Embedded in HTML | Requires auth to decode/view |
+| API credentials | GitHub Secrets / `.env` | Never in code or logs |
+
+### Limitations
+
+| Scenario | Risk Level | Notes |
+|----------|------------|-------|
+| Page source after auth | Low | Dashboard is base64-encoded but decodable |
+| Firebase project access | Low | Requires Google Cloud project permissions |
+| Google Drive backup | Low | Private unless explicitly shared |
 
 ---
 
@@ -20,6 +158,7 @@ This application connects to your Splitwise account, fetches your expense histor
 ### Prerequisites
 
 - Python 3.11 or higher
+- Node.js 18+ (for Firebase CLI)
 - A [Splitwise](https://www.splitwise.com) account with expenses
 
 ### Installation
@@ -111,11 +250,12 @@ Set up GitHub Actions to run automatically on the 1st of each month. See [GitHub
 
 | Feature | Description |
 |---------|-------------|
-| **Interactive Dashboard** | Monthly spending charts, category breakdown, filters, and search |
+| **Live Web Dashboard** | Auth-protected dashboard on Firebase with charts, filters, and search |
 | **Complete Data Backup** | JSON and CSV exports with all Splitwise fields (payments, users, repayments) |
 | **Full History Retrieval** | Fetches all expenses from your first to your most recent via automatic pagination |
-| **Email Reports** | Monthly summary with spending trends, top categories, and a link to the dashboard |
-| **Google Drive Integration** | Automatic cloud backup with optional sharing to family members |
+| **Email Reports** | Monthly summary with spending trends, top categories, and a link to the live dashboard |
+| **Google Drive Backup** | Automatic cloud backup of all expense data |
+| **Google Authentication** | Only authorized emails can access the dashboard |
 | **CSV Export** | Download filtered data directly from the dashboard |
 
 ---
@@ -123,20 +263,37 @@ Set up GitHub Actions to run automatically on the 1st of each month. See [GitHub
 ## Project Structure
 
 ```
-├── family_expenses.py          # Main CLI application
+├── family_expenses.py          # Main CLI entry point
 ├── src/
-│   ├── config.py               # Environment configuration
-│   ├── splitwise_client.py     # Splitwise API integration
-│   ├── dashboard.py            # HTML dashboard generator
-│   ├── email_sender.py         # Email report sender
-│   ├── gdrive.py               # Google Drive integration
-│   └── stats.py                # Statistics calculations
+│   ├── config.py               # Environment configuration loader
+│   ├── splitwise_client.py     # Splitwise API integration + pagination
+│   ├── dashboard.py            # HTML dashboard generator (Jinja2)
+│   ├── email_sender.py         # Gmail SMTP email sender
+│   ├── gdrive.py               # Google Drive OAuth upload/download
+│   ├── firebase.py             # Firebase Hosting deployment
+│   └── stats.py                # Monthly statistics calculations
 ├── templates/
-│   └── dashboard.html          # Dashboard template (Jinja2)
+│   └── dashboard.html          # Dashboard Jinja2 template
+├── firebase_public/
+│   └── index.html              # Auth gate with placeholders
 ├── .github/workflows/
-│   └── expense_report.yml      # GitHub Actions workflow
+│   └── expense_report.yml      # GitHub Actions automation
+├── firebase.json               # Firebase Hosting config
+├── .firebaserc                  # Firebase project binding
 └── Requirements.txt            # Python dependencies
 ```
+
+### Module Responsibilities
+
+| Module | Purpose |
+|--------|---------|
+| `family_expenses.py` | CLI parsing, orchestration, temp file management |
+| `splitwise_client.py` | API connection, pagination, data serialization |
+| `dashboard.py` | Jinja2 template rendering with Plotly charts |
+| `stats.py` | Monthly totals, averages, trends, top categories |
+| `gdrive.py` | OAuth token refresh, file upload/download, sharing |
+| `firebase.py` | Base64 encoding, placeholder injection, CLI deploy |
+| `email_sender.py` | HTML email composition, SMTP send |
 
 ---
 
@@ -184,7 +341,59 @@ Open Splitwise in your browser, navigate to your group, and copy the number from
 
 </details>
 
-### Google Drive OAuth (Optional)
+### Firebase Hosting (Required for Email Reports)
+
+<details>
+<summary>How to set up Firebase Hosting</summary>
+
+Firebase Hosting serves your dashboard as a live web page with Google authentication, so only authorized family members can access it.
+
+**Step 1: Create a Firebase Project**
+
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Click **Add project** (or select your existing Google Cloud project)
+3. Follow the setup wizard
+4. Navigate to **Build** → **Hosting** and click **Get started**
+5. Navigate to **Build** → **Authentication**, enable it, and add **Google** as a sign-in provider
+
+**Step 2: Install Firebase CLI**
+
+```bash
+npm install -g firebase-tools
+```
+
+**Step 3: Login and Initialize**
+
+```bash
+firebase login
+firebase init hosting
+```
+
+When prompted:
+- Select your Firebase project
+- Set public directory to: `firebase_public`
+- Single-page app: **No**
+- Overwrite index.html: **No** (keep the auth gate)
+
+**Step 4: Generate CI Token (for GitHub Actions)**
+
+```bash
+firebase login:ci
+```
+
+Copy the token and add it as `FIREBASE_TOKEN` in your GitHub Secrets.
+
+**Step 5: Test Deployment**
+
+```bash
+firebase deploy --only hosting
+```
+
+Your dashboard will be available at `https://YOUR-PROJECT.web.app`
+
+</details>
+
+### Google Drive OAuth (For Backups)
 
 <details>
 <summary>How to set up Google Drive OAuth</summary>
@@ -279,10 +488,11 @@ You can combine flags: `python family_expenses.py --local --email --full-log`
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--local` | off | Use cached data (Drive → output/ → API) and save files to `output/` |
-| `--email` | off | Send email summary with Google Drive link |
+| `--email` | off | Send email summary with Firebase dashboard link |
 | `--full-log` | off | Enable verbose logging |
 
-**Google Drive upload** always happens when configured (no flag needed).
+**Google Drive upload** always happens when configured (for backup).
+**Firebase deployment** always happens (dashboard accessible at your Firebase URL).
 
 ### Local Mode (`--local`)
 
@@ -316,11 +526,20 @@ This repository includes a GitHub Actions workflow that runs automatically on th
 
 **What the workflow does:**
 
-1. Fetches all expenses from Splitwise
-2. Generates an updated dashboard with monthly statistics
-3. Uploads backup files (JSON, CSV, HTML) to Google Drive
-4. Shares the dashboard with configured recipients
-5. Sends an email report with spending summary and trends
+```
+1. Checkout code
+2. Set up Python 3.11 + Node.js 20
+3. Install Firebase CLI (npm install -g firebase-tools)
+4. Install Python dependencies (pip install -r Requirements.txt)
+5. Run: python family_expenses.py --email
+   ├── Fetch all expenses from Splitwise API
+   ├── Generate dashboard with monthly statistics
+   ├── Upload backup files to Google Drive
+   ├── Deploy dashboard to Firebase Hosting
+   └── Send email with Firebase URL
+```
+
+**Execution time:** ~2-3 minutes (depending on expense count)
 
 ### Running Manually
 
@@ -347,6 +566,7 @@ Navigate to **Settings** → **Secrets and variables** → **Actions** → **Sec
 | `GDRIVE_CLIENT_SECRET` | For backup | Google OAuth Client Secret |
 | `GDRIVE_REFRESH_TOKEN` | For backup | Google OAuth Refresh Token |
 | `GDRIVE_FOLDER_ID` | For backup | Google Drive folder ID |
+| `FIREBASE_TOKEN` | For hosting | Firebase CI token (from `firebase login:ci`) |
 
 ### GitHub Variables
 

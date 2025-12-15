@@ -233,7 +233,7 @@ RECIPIENT_EMAIL=recipient1@email.com,recipient2@email.com
 ### Usage
 
 ```bash
-# Generate dashboard and upload to Google Drive
+# Generate dashboard and upload to Google Drive (fetches fresh data from Splitwise)
 python family_expenses.py
 
 # Generate dashboard and send email
@@ -242,13 +242,39 @@ python family_expenses.py --email
 # Generate dashboard without Drive upload (uses temp files)
 python family_expenses.py --no-upload
 
-# Generate dashboard locally in output/ folder (for testing)
+# Generate dashboard locally using cached data (no API calls)
 python family_expenses.py --local
 ```
 
-With `--local`, files are saved to `output/` and you can open the dashboard in your browser:
+### Local Mode (`--local`)
+
+The `--local` flag is designed for quick testing and development without making unnecessary API calls to Splitwise.
+
+**How it works:**
+
+1. **Tries Google Drive cache first** — Downloads the most recent `*_expenses.json` from your Google Drive folder
+2. **Falls back to local cache** — If Google Drive is unavailable, uses the most recent file in `output/`
+3. **Falls back to Splitwise API** — Only calls the API if no cached data exists anywhere
+
+**Benefits:**
+- Fast dashboard generation (no API latency)
+- Reduced Splitwise API usage
+- Works offline if you have local cached files
+- Uses the same data that was last uploaded to Drive
+
+**Output:**
+Files are saved to `output/` folder with date prefix:
+```
+output/
+├── 2025-12-15_expenses.json
+├── 2025-12-15_expenses.csv
+└── 2025-12-15_expenses_dashboard.html
+```
+
+If files with the same date already exist, they are replaced.
 
 ```bash
+# Open the generated dashboard
 open output/2025-12-15_expenses_dashboard.html
 ```
 

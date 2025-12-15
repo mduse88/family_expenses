@@ -2,10 +2,12 @@
 
 import os
 
+import io
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
 from src.config import gdrive as config
 
@@ -118,6 +120,77 @@ def get_service():
     
     credentials = _create_credentials()
     return build("drive", "v3", credentials=credentials)
+
+
+def find_latest_json() -> tuple[str, str] | None:
+    """Find the most recent expenses.json file in Google Drive folder.
+    
+    Returns:
+        Tuple of (file_id, filename) for the most recent *_expenses.json,
+        or None if no matching files found.
+        
+    Raises:
+        ValueError: If Google Drive configuration is incomplete.
+    """
+    if not config.is_configured:
+        return None
+    
+    try:
+        service = get_service()
+        
+        # Search for files matching *_expenses.json in the configured folder
+        query = f"'{config.folder_id}' in parents and name contains '_expenses.json' and trashed = false"
+        
+        results = service.files().list(
+            q=query,
+            spaces="drive",
+            fields="files(id, name)",
+            orderBy="name desc",  # Date prefix means newest first when sorted desc
+            pageSize=1,
+        ).execute()
+        
+        files = results.get("files", [])
+        
+        if files:
+            latest = files[0]
+            return (latest["id"], latest["name"])
+        
+        return None
+        
+    except Exception as e:
+        print(f"Warning: Could not search Google Drive: {e}")
+        return None
+
+
+def download_json(file_id: str) -> str:
+    """Download a JSON file from Google Drive.
+    
+    Args:
+        file_id: The Google Drive file ID to download.
+        
+    Returns:
+        The file content as a string.
+        
+    Raises:
+        ValueError: If Google Drive configuration is incomplete.
+        Exception: If download fails.
+    """
+    if not config.is_configured:
+        raise ValueError("Google Drive not configured")
+    
+    service = get_service()
+    
+    request = service.files().get_media(fileId=file_id)
+    
+    buffer = io.BytesIO()
+    downloader = MediaIoBaseDownload(buffer, request)
+    
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    
+    buffer.seek(0)
+    return buffer.read().decode("utf-8")
 
 
 def _create_credentials() -> Credentials:

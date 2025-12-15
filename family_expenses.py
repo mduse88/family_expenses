@@ -7,9 +7,13 @@ uploads to Google Drive, and optionally sends email notifications.
 """
 
 import argparse
+import glob
+import json
 import os
 import tempfile
 from datetime import datetime
+
+import pandas as pd
 
 from src import splitwise_client, dashboard, gdrive, email_sender, stats
 from src.config import app as app_config
@@ -98,6 +102,61 @@ def cleanup_temp_files(temp_files: list[str]) -> None:
             pass
 
 
+def find_latest_local_json() -> str | None:
+    """Find the most recent expenses.json file in output/ folder.
+    
+    Returns:
+        Path to the most recent *_expenses.json file, or None if not found.
+    """
+    output_dir = "output"
+    if not os.path.exists(output_dir):
+        return None
+    
+    # Find all *_expenses.json files (date prefix means sorted = newest last)
+    pattern = os.path.join(output_dir, "*_expenses.json")
+    files = sorted(glob.glob(pattern))
+    
+    if files:
+        return files[-1]  # Return the most recent (last when sorted)
+    
+    return None
+
+
+def load_cached_data() -> pd.DataFrame | None:
+    """Try to load cached data from Google Drive or local output/ folder.
+    
+    Fallback order:
+    1. Google Drive (most recent *_expenses.json)
+    2. Local output/ folder (most recent *_expenses.json)
+    
+    Returns:
+        DataFrame with cached data, or None if no cache available.
+    """
+    # Try Google Drive first
+    if gdrive_config.is_configured:
+        result = gdrive.find_latest_json()
+        if result:
+            file_id, filename = result
+            print(f"Loading cached data from Google Drive: {filename}")
+            try:
+                json_content = gdrive.download_json(file_id)
+                data = json.loads(json_content)
+                return pd.DataFrame(data)
+            except Exception as e:
+                print(f"Warning: Failed to download from Google Drive: {e}")
+    
+    # Fall back to local output/ folder
+    local_path = find_latest_local_json()
+    if local_path:
+        print(f"Loading cached data from local file: {local_path}")
+        try:
+            return pd.read_json(local_path)
+        except Exception as e:
+            print(f"Warning: Failed to read local cache: {e}")
+    
+    return None
+
+
 def create_local_files(raw_df, timestamp: str) -> tuple[str, str, str]:
     """Create files in output/ directory for local viewing.
     
@@ -115,6 +174,11 @@ def create_local_files(raw_df, timestamp: str) -> tuple[str, str, str]:
     csv_path = os.path.join(output_dir, f"{timestamp}_expenses.csv")
     html_path = os.path.join(output_dir, f"{timestamp}_expenses_dashboard.html")
     
+    # Remove existing files with same name before creating new ones
+    for path in [json_path, csv_path, html_path]:
+        if os.path.exists(path):
+            os.remove(path)
+    
     # Save full raw data for backup
     raw_df.to_json(json_path, orient="records", index=False, indent=2, date_format="iso", default_handler=str)
     raw_df.to_csv(csv_path, index=False)
@@ -128,7 +192,45 @@ def main() -> None:
     
     print(f"=== Starting {app_config.title} ===")
     
-    # Fetch raw data from Splitwise (all fields, all records)
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    
+    # Local mode: use cached data to avoid API calls
+    if args.local:
+        raw_df = load_cached_data()
+        
+        if raw_df is None:
+            print("No cached data found - fetching from Splitwise API...")
+            client = splitwise_client.get_client()
+            raw_df = splitwise_client.get_raw_expenses(client)
+        
+        if raw_df.empty:
+            print("ERROR: No data found!")
+            return
+        
+        print(f"Raw data: {len(raw_df)} total records (including payments)")
+        
+        # Process for dashboard
+        processed_df = splitwise_client.process_for_dashboard(raw_df)
+        
+        print(f"Dashboard data: {len(processed_df)} expenses")
+        if not processed_df.empty:
+            print(f"Date range: {processed_df['date'].min()} to {processed_df['date'].max()}")
+            print(f"Months found: {processed_df['month_str'].nunique()}")
+        
+        summary = stats.calculate_monthly_summary(processed_df)
+        print(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
+        
+        json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
+        dashboard.generate(processed_df, html_path, summary=summary)
+        print(f"\nFiles saved to output/:")
+        print(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
+        print(f"  - {json_path} (full backup: {len(raw_df)} records)")
+        print(f"  - {csv_path} (full backup: {len(raw_df)} records)")
+        print(f"\nOpen the dashboard: open {html_path}")
+        return
+    
+    # Cloud mode: always fetch fresh data from Splitwise
+    print("Fetching fresh data from Splitwise API...")
     client = splitwise_client.get_client()
     raw_df = splitwise_client.get_raw_expenses(client)
     
@@ -149,19 +251,6 @@ def main() -> None:
     # Calculate monthly summary statistics
     summary = stats.calculate_monthly_summary(processed_df)
     print(f"Monthly summary: {summary['month_name']} - €{summary['total_expenses']:,.2f}")
-    
-    timestamp = datetime.now().strftime("%Y-%m-%d")
-    
-    # Local mode: save to output/ folder
-    if args.local:
-        json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
-        dashboard.generate(processed_df, html_path, summary=summary)
-        print(f"\nFiles saved to output/:")
-        print(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
-        print(f"  - {json_path} (full backup: {len(raw_df)} records)")
-        print(f"  - {csv_path} (full backup: {len(raw_df)} records)")
-        print(f"\nOpen the dashboard: open {html_path}")
-        return
     
     # Cloud mode: use temp files
     temp_files, json_path, csv_path, html_path = create_temp_files(raw_df)

@@ -39,7 +39,7 @@ def calculate_monthly_summary(df: pd.DataFrame, num_top_categories: int = 5) -> 
     if df.empty:
         return _empty_summary()
     
-    report_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+    report_date = datetime.now().strftime("%b %d, %Y")
     
     # Get the most recent complete month (not current month)
     # Use UTC timezone to match the DataFrame's date column
@@ -206,7 +206,7 @@ def _calculate_top_categories(
 def _empty_summary() -> dict:
     """Return an empty summary structure."""
     return {
-        'report_date': datetime.now().strftime("%Y-%m-%d %H:%M"),
+        'report_date': datetime.now().strftime("%b %d, %Y"),
         'month_name': 'No data',
         'total_expenses': 0.0,
         'expense_count': 0,

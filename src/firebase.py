@@ -97,58 +97,104 @@ def deploy() -> str | None:
     # Check for Firebase token (for CI) or assume logged in locally
     firebase_token = os.getenv("FIREBASE_TOKEN")
     
+    # #region agent log
+    log_info(f"[DEBUG-CI] deploy() called, has_token={bool(firebase_token)}")
+    # #endregion
+    
+    # Build base command
+    cmd_parts = ["firebase", "deploy", "--only", "hosting"]
+    if firebase_token:
+        cmd_parts.extend(["--token", firebase_token])
+    
+    result = None
+    
+    # Strategy 1: Try direct execution (works in GitHub Actions where firebase is in PATH)
     try:
-        # Build command - use shell to ensure nvm/node paths are available
-        cmd_parts = ["firebase", "deploy", "--only", "hosting"]
-        
-        if firebase_token:
-            cmd_parts.extend(["--token", firebase_token])
-        
-        # Run firebase deploy via shell to pick up nvm environment
-        cmd_str = " ".join(cmd_parts)
-        shell_cmd = f'source "$HOME/.nvm/nvm.sh" 2>/dev/null; {cmd_str}'
-        
-        # Run firebase deploy
+        # #region agent log
+        log_info("[DEBUG-CI] Trying direct firebase execution...")
+        # #endregion
         result = subprocess.run(
-            shell_cmd,
-            shell=True,
+            cmd_parts,
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout
+            timeout=120
         )
-        
-        if result.returncode != 0:
-            log_error("ERROR: Firebase deploy failed", result.stderr)
-            return None
-        
-        # Extract URL from output
-        # Firebase outputs something like: "Hosting URL: https://project-id.web.app"
-        for line in result.stdout.split("\n"):
-            if "Hosting URL:" in line:
-                url = line.split("Hosting URL:")[-1].strip()
-                return url
-        
-        # Try to construct URL from .firebaserc
+        # #region agent log
+        log_info(f"[DEBUG-CI] Direct exec result: returncode={result.returncode}")
+        # #endregion
+    except FileNotFoundError:
+        # #region agent log
+        log_info("[DEBUG-CI] Direct exec failed (FileNotFoundError), trying shell with nvm...")
+        # #endregion
+        # Strategy 2: Try with nvm sourcing (for local dev with nvm-managed node)
         try:
-            with open(".firebaserc", "r") as f:
-                firebaserc_config = json.load(f)
-                project_id = firebaserc_config.get("projects", {}).get("default")
-                if project_id:
-                    return f"https://{project_id}.web.app"
-        except Exception:
-            pass
-        
-        return None
-        
+            cmd_str = " ".join(cmd_parts)
+            shell_cmd = f'source "$HOME/.nvm/nvm.sh" 2>/dev/null; {cmd_str}'
+            result = subprocess.run(
+                shell_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            # #region agent log
+            log_info(f"[DEBUG-CI] Shell exec result: returncode={result.returncode}")
+            # #endregion
+        except Exception as e:
+            log_info(f"ERROR: Firebase deploy failed - {type(e).__name__}")
+            return None
     except subprocess.TimeoutExpired:
         log_info("ERROR: Firebase deploy timed out")
         return None
-    except FileNotFoundError:
-        log_info("ERROR: Firebase CLI not found")
-        return None
     except Exception as e:
-        log_error("ERROR: Firebase deploy failed", str(e))
+        log_info(f"ERROR: Firebase deploy failed - {type(e).__name__}")
         return None
+    
+    if result is None:
+        log_info("ERROR: Firebase deploy - no result")
+        return None
+    
+    if result.returncode != 0:
+        # #region agent log
+        log_info(f"[DEBUG-CI] Deploy failed, stderr length: {len(result.stderr)}")
+        # #endregion
+        log_error("ERROR: Firebase deploy failed", result.stderr)
+        return None
+    
+    # #region agent log
+    log_info(f"[DEBUG-CI] Deploy succeeded, stdout length: {len(result.stdout)}")
+    # #endregion
+    
+    # Extract URL from output
+    # Firebase outputs something like: "Hosting URL: https://project-id.web.app"
+    for line in result.stdout.split("\n"):
+        if "Hosting URL:" in line:
+            url = line.split("Hosting URL:")[-1].strip()
+            # #region agent log
+            log_info(f"[DEBUG-CI] Found URL in output: {url}")
+            # #endregion
+            return url
+    
+    # #region agent log
+    log_info("[DEBUG-CI] No 'Hosting URL:' found in output, trying .firebaserc fallback")
+    # #endregion
+    
+    # Try to construct URL from .firebaserc
+    try:
+        with open(".firebaserc", "r") as f:
+            firebaserc_config = json.load(f)
+            project_id = firebaserc_config.get("projects", {}).get("default")
+            if project_id:
+                url = f"https://{project_id}.web.app"
+                # #region agent log
+                log_info(f"[DEBUG-CI] Constructed URL from .firebaserc: {url}")
+                # #endregion
+                return url
+    except Exception:
+        pass
+    
+    log_info("[DEBUG-CI] Could not determine Firebase URL")
+    return None
 
 
 def restore_index_html() -> None:

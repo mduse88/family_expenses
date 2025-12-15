@@ -331,12 +331,31 @@ def deploy_dashboard(dashboard_html_path: str) -> str | None:
     Returns:
         The deployed Firebase URL if successful, None otherwise.
     """
+    # #region agent log
+    log_info(f"[DEBUG-CI] deploy_dashboard() called with path: {dashboard_html_path}")
+    # #endregion
+    
     if not prepare_deployment(dashboard_html_path):
+        # #region agent log
+        log_info("[DEBUG-CI] prepare_deployment() returned False")
+        # #endregion
         return None
+    
+    # #region agent log
+    log_info("[DEBUG-CI] prepare_deployment() succeeded, calling deploy()")
+    # #endregion
     
     url = deploy()
     
+    # #region agent log
+    log_info(f"[DEBUG-CI] deploy() returned: '{url}'")
+    # #endregion
+    
     # Restore placeholders for next deployment
     restore_index_html()
+    
+    # #region agent log
+    log_info(f"[DEBUG-CI] deploy_dashboard() returning: '{url}'")
+    # #endregion
     
     return url

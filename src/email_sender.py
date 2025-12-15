@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 
 from src.config import app as app_config
 from src.config import email as config
-from src.logging_utils import log_error
+from src.logging_utils import log_error, log_info
 
 
 def send_dashboard(dashboard_link: str, summary: dict) -> None:
@@ -20,6 +20,10 @@ def send_dashboard(dashboard_link: str, summary: dict) -> None:
         ValueError: If email configuration is incomplete.
         Exception: If email sending fails.
     """
+    # #region agent log
+    log_info(f"[DEBUG-CI] send_dashboard() called with dashboard_link: '{dashboard_link}'")
+    # #endregion
+    
     if not config.is_configured:
         raise ValueError(
             "Email not configured - missing GMAIL_ADDRESS, GMAIL_APP_PASSWORD, or RECIPIENT_EMAIL"

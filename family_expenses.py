@@ -262,19 +262,34 @@ def main() -> None:
         
         # Step 7: Deploy to Firebase Hosting (the dashboard URL for email)
         firebase_url = None
+        # #region agent log
+        log_info(f"[DEBUG-CI] Calling firebase.deploy_dashboard({html_path})")
+        # #endregion
         firebase_url = firebase.deploy_dashboard(html_path)
+        # #region agent log
+        log_info(f"[DEBUG-CI] firebase_url received: '{firebase_url}' (type: {type(firebase_url).__name__})")
+        # #endregion
         if firebase_url:
             log_verbose(f"Dashboard deployed to Firebase: {firebase_url}")
         else:
             log_verbose("Firebase deployment skipped or failed")
         
         # Step 8: Send email (when --email flag is passed)
+        # #region agent log
+        log_info(f"[DEBUG-CI] Email check: args.email={args.email}, email_configured={email_config.is_configured}, firebase_url='{firebase_url}'")
+        # #endregion
         if args.email:
             if not email_config.is_configured:
                 log_verbose("Email not configured - skipping")
             elif firebase_url:
                 # Use Firebase URL (auth-protected live dashboard)
+                # #region agent log
+                log_info(f"[DEBUG-CI] Calling email_sender.send_dashboard('{firebase_url}', summary)")
+                # #endregion
                 email_sender.send_dashboard(firebase_url, summary)
+                # #region agent log
+                log_info("[DEBUG-CI] email_sender.send_dashboard() completed")
+                # #endregion
                 log_verbose("Email sent with Firebase dashboard link")
             else:
                 log_info("WARNING: No Firebase URL available - skipping email")

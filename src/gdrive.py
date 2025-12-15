@@ -54,7 +54,7 @@ def upload_files(files: list[tuple[str, str]], timestamp: str) -> dict[str, str]
             file_ids[key] = file_id
                 
     except Exception as e:
-        print(f"Failed to upload to Google Drive: {e}")
+        print("ERROR: Failed to upload to Google Drive")
         raise
     
     return file_ids
@@ -89,9 +89,9 @@ def share_with_emails(file_id: str, emails: list[str]) -> None:
                 body=permission,
                 sendNotificationEmail=False,  # Don't send Google's default notification
             ).execute()
-            print(f"Shared file with {email}")
+            pass  # Shared successfully
         except Exception as e:
-            print(f"Warning: Could not share with {email}: {e}")
+            pass  # Silently continue on sharing error
 
 
 def get_view_link(file_id: str) -> str:
@@ -158,7 +158,7 @@ def find_latest_json() -> tuple[str, str] | None:
         return None
         
     except Exception as e:
-        print(f"Warning: Could not search Google Drive: {e}")
+        pass  # Silently return None on search error
         return None
 
 
@@ -241,6 +241,6 @@ def _upload_single_file(service, file_path: str, base_name: str, timestamp: str)
     ).execute()
     
     file_id = result.get("id")
-    print(f"Uploaded {file_name} to Google Drive")
+    # File uploaded successfully
     
     return file_id

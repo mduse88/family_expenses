@@ -142,23 +142,21 @@ def load_cached_data() -> pd.DataFrame | None:
     if gdrive_config.is_configured:
         result = gdrive.find_latest_json()
         if result:
-            file_id, filename = result
-            print(f"Loading cached data from Google Drive: {filename}")
+            file_id, _ = result
             try:
                 json_content = gdrive.download_json(file_id)
                 data = json.loads(json_content)
                 return pd.DataFrame(data)
-            except Exception as e:
-                print(f"Warning: Failed to download from Google Drive: {e}")
+            except Exception:
+                pass  # Fall through to local cache
     
     # Fall back to local output/ folder
     local_path = find_latest_local_json()
     if local_path:
-        print(f"Loading cached data from local file: {local_path}")
         try:
             return pd.read_json(local_path)
-        except Exception as e:
-            print(f"Warning: Failed to read local cache: {e}")
+        except Exception:
+            pass  # Return None below
     
     return None
 
@@ -206,24 +204,24 @@ def main() -> None:
         if full_log:
             print(message)
     
-    log_info(f"=== Starting {app_config.title} ===")
+    log_verbose(f"=== Starting {app_config.title} ===")
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
     
     # Local mode: use cached data to avoid API calls
     if args.local:
-        log_info("Mode: local (use cached data if available)")
+        log_verbose("Mode: local (use cached data if available)")
         raw_df = load_cached_data()
         
         if raw_df is None:
-            log_info("No cached data found - fetching from Splitwise API...")
+            log_verbose("No cached data found - fetching from Splitwise API...")
             client = splitwise_client.get_client()
             raw_df = splitwise_client.get_raw_expenses(client)
         else:
-            log_info("Loaded cached data")
+            log_verbose("Loaded cached data")
         
         if raw_df.empty:
-            log_info("ERROR: No data found!")
+            log_info("ERROR: No data found")
             return
         
         log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
@@ -241,7 +239,7 @@ def main() -> None:
         
         json_path, csv_path, html_path = create_local_files(raw_df, timestamp)
         dashboard.generate(processed_df, html_path, summary=summary)
-        log_info("Saved files to output/ (local mode)")
+        log_verbose("Saved files to output/ (local mode)")
         log_verbose(f"  - {html_path} (dashboard with {len(processed_df)} expenses)")
         log_verbose(f"  - {json_path} (full backup: {len(raw_df)} records)")
         log_verbose(f"  - {csv_path} (full backup: {len(raw_df)} records)")
@@ -249,7 +247,7 @@ def main() -> None:
         return
     
     # Cloud mode: always fetch fresh data from Splitwise
-    log_info("Mode: cloud (fresh fetch from Splitwise API)")
+    log_verbose("Mode: cloud (fresh fetch from Splitwise API)")
     log_verbose("Fetching fresh data from Splitwise API...")
     client = splitwise_client.get_client()
     raw_df = splitwise_client.get_raw_expenses(client)
@@ -257,7 +255,7 @@ def main() -> None:
     log_verbose(f"Raw data: {len(raw_df)} total records (including payments)")
     
     if raw_df.empty:
-        log_info("ERROR: No data found! Check API key and group_id.")
+        log_info("ERROR: No data found")
         return
     
     # Process for dashboard (filter payments, select columns)
@@ -278,7 +276,7 @@ def main() -> None:
     try:
         # Generate dashboard with processed data and summary
         dashboard.generate(processed_df, html_path, summary=summary)
-        log_info("Dashboard generated")
+        log_verbose("Dashboard generated")
         log_verbose(f"Generated dashboard with {len(processed_df)} expenses")
         
         file_ids = {}
@@ -307,9 +305,9 @@ def main() -> None:
                         log_verbose(f"Sharing dashboard with {len(recipient_list)} recipient(s)")
                         gdrive.share_with_emails(dashboard_file_id, recipient_list)
             else:
-                log_info("Google Drive not configured - skipping upload")
+                log_verbose("Google Drive not configured - skipping upload")
         else:
-            log_info("Google Drive upload skipped (--no-upload flag)")
+            log_verbose("Google Drive upload skipped (--no-upload flag)")
         
         # Send email with summary and Drive link
         if args.email:
@@ -317,10 +315,10 @@ def main() -> None:
                 if dashboard_link:
                     email_sender.send_dashboard(dashboard_link, summary)
                 else:
-                    log_info("Warning: No dashboard link available - email requires Google Drive upload")
+                    log_info("ERROR: Email requires Google Drive upload")
                     log_verbose("Run without --no-upload to enable email with Drive link")
             else:
-                log_info("Email not configured - skipping")
+                log_verbose("Email not configured - skipping")
     
     finally:
         cleanup_temp_files(temp_files)

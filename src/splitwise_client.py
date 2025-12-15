@@ -46,7 +46,7 @@ def get_client() -> Splitwise:
     if not config.api_key:
         raise ValueError("Missing api_key environment variable")
     
-    print(f"Connecting to Splitwise with API key: {config.api_key[:8]}...")
+    # Connecting to Splitwise
     return Splitwise("", "", api_key=config.api_key)
 
 
@@ -71,9 +71,6 @@ def get_raw_expenses(client: Splitwise) -> pd.DataFrame:
     
     if config.group_id:
         params["group_id"] = config.group_id
-        print(f"Fetching expenses for group: {config.group_id}")
-    else:
-        print("⚠️  No group_id configured - fetching expenses from ALL groups")
     
     # Pagination settings
     BATCH_SIZE = 100
@@ -81,19 +78,14 @@ def get_raw_expenses(client: Splitwise) -> pd.DataFrame:
     all_expenses = []
     
     # Fetch all expenses in batches
-    print("Fetching all expenses with pagination...")
     while True:
         batch = client.getExpenses(limit=BATCH_SIZE, offset=offset, **params)
         if not batch:
             break
         all_expenses.extend(batch)
-        print(f"  Fetched {len(all_expenses)} records so far...")
         offset += BATCH_SIZE
-    
-    print(f"Retrieved {len(all_expenses)} total records from Splitwise API")
 
     # Convert to DataFrame with ALL fields, properly serializing nested objects
-    print("Serializing expense data...")
     dicts = [_serialize_object(obj) for obj in all_expenses]
     df = pd.DataFrame(dicts)
     
@@ -120,7 +112,7 @@ def process_for_dashboard(raw_df: pd.DataFrame) -> pd.DataFrame:
     # Filter out payments (settlements)
     if "payment" in df.columns:
         expenses_only = df[df["payment"] == False].copy()
-        print(f"Filtered: {len(df)} records → {len(expenses_only)} expenses (excluded {len(df) - len(expenses_only)} payments)")
+        # Filtered expenses from raw data
         df = expenses_only
 
     # Parse dates

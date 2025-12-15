@@ -38,7 +38,7 @@ def generate(df: pd.DataFrame, output_path: str, summary: Optional[dict] = None)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_content)
     
-    print(f"Dashboard saved to {output_path}")
+    # Dashboard saved
 
 
 def _prepare_template_context(df: pd.DataFrame, summary: Optional[dict] = None) -> dict:

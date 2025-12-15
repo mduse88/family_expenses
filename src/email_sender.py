@@ -48,9 +48,9 @@ def send_dashboard(dashboard_link: str, summary: dict) -> None:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(config.gmail_address, config.gmail_app_password)
             server.sendmail(config.gmail_address, recipient_list, msg.as_string())
-        print(f"Email sent successfully to: {', '.join(recipient_list)}")
+        pass  # Email sent successfully
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print("ERROR: Failed to send email")
         raise
 
 

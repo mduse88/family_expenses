@@ -98,14 +98,20 @@ def deploy() -> str | None:
     firebase_token = os.getenv("FIREBASE_TOKEN")
     
     try:
-        cmd = ["firebase", "deploy", "--only", "hosting"]
+        # Build command - use shell to ensure nvm/node paths are available
+        cmd_parts = ["firebase", "deploy", "--only", "hosting"]
         
         if firebase_token:
-            cmd.extend(["--token", firebase_token])
+            cmd_parts.extend(["--token", firebase_token])
+        
+        # Run firebase deploy via shell to pick up nvm environment
+        cmd_str = " ".join(cmd_parts)
+        shell_cmd = f'source "$HOME/.nvm/nvm.sh" 2>/dev/null; {cmd_str}'
         
         # Run firebase deploy
         result = subprocess.run(
-            cmd,
+            shell_cmd,
+            shell=True,
             capture_output=True,
             text=True,
             timeout=120  # 2 minute timeout
@@ -125,8 +131,8 @@ def deploy() -> str | None:
         # Try to construct URL from .firebaserc
         try:
             with open(".firebaserc", "r") as f:
-                config = json.load(f)
-                project_id = config.get("projects", {}).get("default")
+                firebaserc_config = json.load(f)
+                project_id = firebaserc_config.get("projects", {}).get("default")
                 if project_id:
                     return f"https://{project_id}.web.app"
         except Exception:

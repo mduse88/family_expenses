@@ -97,10 +97,6 @@ def deploy() -> str | None:
     # Check for Firebase token (for CI) or assume logged in locally
     firebase_token = os.getenv("FIREBASE_TOKEN")
     
-    # #region agent log
-    log_info(f"[DEBUG-CI] deploy() called, has_token={bool(firebase_token)}")
-    # #endregion
-    
     # Build base command
     cmd_parts = ["firebase", "deploy", "--only", "hosting"]
     if firebase_token:
@@ -110,22 +106,13 @@ def deploy() -> str | None:
     
     # Strategy 1: Try direct execution (works in GitHub Actions where firebase is in PATH)
     try:
-        # #region agent log
-        log_info("[DEBUG-CI] Trying direct firebase execution...")
-        # #endregion
         result = subprocess.run(
             cmd_parts,
             capture_output=True,
             text=True,
             timeout=120
         )
-        # #region agent log
-        log_info(f"[DEBUG-CI] Direct exec result: returncode={result.returncode}")
-        # #endregion
     except FileNotFoundError:
-        # #region agent log
-        log_info("[DEBUG-CI] Direct exec failed (FileNotFoundError), trying shell with nvm...")
-        # #endregion
         # Strategy 2: Try with nvm sourcing (for local dev with nvm-managed node)
         try:
             cmd_str = " ".join(cmd_parts)
@@ -137,17 +124,14 @@ def deploy() -> str | None:
                 text=True,
                 timeout=120
             )
-            # #region agent log
-            log_info(f"[DEBUG-CI] Shell exec result: returncode={result.returncode}")
-            # #endregion
-        except Exception as e:
-            log_info(f"ERROR: Firebase deploy failed - {type(e).__name__}")
+        except Exception:
+            log_info("ERROR: Firebase deploy failed")
             return None
     except subprocess.TimeoutExpired:
         log_info("ERROR: Firebase deploy timed out")
         return None
-    except Exception as e:
-        log_info(f"ERROR: Firebase deploy failed - {type(e).__name__}")
+    except Exception:
+        log_info("ERROR: Firebase deploy failed")
         return None
     
     if result is None:
@@ -155,15 +139,8 @@ def deploy() -> str | None:
         return None
     
     if result.returncode != 0:
-        # #region agent log
-        log_info(f"[DEBUG-CI] Deploy failed, stderr length: {len(result.stderr)}")
-        # #endregion
         log_error("ERROR: Firebase deploy failed", result.stderr)
         return None
-    
-    # #region agent log
-    log_info(f"[DEBUG-CI] Deploy succeeded, stdout length: {len(result.stdout)}")
-    # #endregion
     
     # Extract URL from output
     # Firebase outputs something like: "Hosting URL: https://project-id.web.app"
@@ -175,14 +152,7 @@ def deploy() -> str | None:
             url = line.split("Hosting URL:")[-1].strip()
             # Strip ANSI escape codes from URL
             url = ansi_escape.sub('', url).strip()
-            # #region agent log
-            log_info(f"[DEBUG-CI] Found URL in output (cleaned): {url}")
-            # #endregion
             return url
-    
-    # #region agent log
-    log_info("[DEBUG-CI] No 'Hosting URL:' found in output, trying .firebaserc fallback")
-    # #endregion
     
     # Try to construct URL from .firebaserc
     try:
@@ -190,15 +160,10 @@ def deploy() -> str | None:
             firebaserc_config = json.load(f)
             project_id = firebaserc_config.get("projects", {}).get("default")
             if project_id:
-                url = f"https://{project_id}.web.app"
-                # #region agent log
-                log_info(f"[DEBUG-CI] Constructed URL from .firebaserc: {url}")
-                # #endregion
-                return url
+                return f"https://{project_id}.web.app"
     except Exception:
         pass
     
-    log_info("[DEBUG-CI] Could not determine Firebase URL")
     return None
 
 
@@ -336,31 +301,12 @@ def deploy_dashboard(dashboard_html_path: str) -> str | None:
     Returns:
         The deployed Firebase URL if successful, None otherwise.
     """
-    # #region agent log
-    log_info(f"[DEBUG-CI] deploy_dashboard() called with path: {dashboard_html_path}")
-    # #endregion
-    
     if not prepare_deployment(dashboard_html_path):
-        # #region agent log
-        log_info("[DEBUG-CI] prepare_deployment() returned False")
-        # #endregion
         return None
-    
-    # #region agent log
-    log_info("[DEBUG-CI] prepare_deployment() succeeded, calling deploy()")
-    # #endregion
     
     url = deploy()
     
-    # #region agent log
-    log_info(f"[DEBUG-CI] deploy() returned: '{url}'")
-    # #endregion
-    
     # Restore placeholders for next deployment
     restore_index_html()
-    
-    # #region agent log
-    log_info(f"[DEBUG-CI] deploy_dashboard() returning: '{url}'")
-    # #endregion
     
     return url

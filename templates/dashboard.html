@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* ==================== CSS Variables ==================== */
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --bg-input: #0f172a;
+            --border-color: #334155;
+            --border-light: #475569;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-blue-hover: #2563eb;
+            --accent-coral: #f97316;
+            --accent-emerald: #10b981;
+            --accent-purple: #8b5cf6;
+            --expense-red: #ef4444;
+            --chart-blue: #60a5fa;
+            --chart-coral: #fb923c;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --font-heading: 'DM Sans', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --transition-fast: 0.15s ease;
+            --transition-normal: 0.25s ease;
+        }
+
+        /* ==================== Reset & Base ==================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 24px;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* ==================== Layout ==================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-family: var(--font-heading);
+            color: var(--text-primary);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: var(--font-heading);
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .section-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* ==================== KPI Cards ==================== */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            transition: border-color var(--transition-fast);
+        }
+
+        .kpi-card:hover {
+            border-color: var(--border-light);
+        }
+
+        .kpi-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .kpi-value {
+            font-family: var(--font-heading);
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .kpi-card:nth-child(1) .kpi-value { color: var(--accent-coral); }
+        .kpi-card:nth-child(2) .kpi-value { color: var(--accent-blue); }
+        .kpi-card:nth-child(3) .kpi-value { color: var(--accent-emerald); }
+        .kpi-card:nth-child(4) .kpi-value { color: var(--accent-purple); }
+
+        .kpi-sub {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* ==================== Filters ==================== */
+        .filters-section {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .filters-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .filters-header:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .filters-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-heading);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .filters-toggle svg {
+            transition: transform var(--transition-normal);
+        }
+
+        .filters-section.collapsed .filters-toggle svg {
+            transform: rotate(-90deg);
+        }
+
+        .filters-content {
+            padding: 0 20px 20px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            max-height: 500px;
+            transition: max-height var(--transition-normal), padding var(--transition-normal), opacity var(--transition-normal);
+        }
+
+        .filters-section.collapsed .filters-content {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            overflow: hidden;
+            opacity: 0;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .filter-group > label {
+            font-weight: 500;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .filter-group input[type="text"] {
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-family: var(--font-body);
+            min-width: 220px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            transition: border-color var(--transition-fast);
+        }
+
+        .filter-group input[type="text"]::placeholder {
+            color: var(--text-muted);
+        }
+
+        .filter-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        /* Multi-select dropdown */
+        .multi-select {
+            position: relative;
+            min-width: 180px;
+        }
+
+        .multi-select-btn {
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-family: var(--font-body);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-width: 180px;
+            transition: border-color var(--transition-fast);
+        }
+
+        .multi-select-btn:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .multi-select-btn::after {
+            content: "▼";
+            font-size: 8px;
+            margin-left: 8px;
+            color: var(--text-muted);
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .multi-select-dropdown.open {
+            display: block;
+        }
+
+        .multi-select-option {
+            padding: 10px 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background var(--transition-fast);
+            font-size: 0.875rem;
+        }
+
+        .multi-select-option:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .multi-select-option input {
+            margin: 0;
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-blue);
+        }
+
+        .multi-select-actions {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 16px;
+            background: var(--bg-card);
+        }
+
+        .multi-select-actions a {
+            font-size: 0.8rem;
+            color: var(--accent-blue);
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .multi-select-actions a:hover {
+            text-decoration: underline;
+        }
+
+        /* Buttons */
+        button.reset-btn {
+            padding: 10px 20px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: var(--font-body);
+            font-weight: 500;
+            transition: background var(--transition-fast);
+        }
+
+        button.reset-btn:hover {
+            background: var(--accent-blue-hover);
+        }
+
+        button.download-btn {
+            padding: 10px 20px;
+            background: var(--accent-emerald);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: var(--font-body);
+            font-weight: 500;
+            transition: background var(--transition-fast), transform var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button.download-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        /* ==================== Charts ==================== */
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .chart-box {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            min-height: 400px;
+        }
+
+        .chart-title {
+            font-family: var(--font-heading);
+            font-size: 1rem;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .chart-desc {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-bottom: 16px;
+        }
+
+        /* ==================== Table ==================== */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .stats {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 14px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+        }
+
+        th {
+            background: var(--bg-primary);
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            position: sticky;
+            top: 0;
+        }
+
+        tr {
+            transition: background var(--transition-fast);
+        }
+
+        tr:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .cost {
+            font-weight: 600;
+            color: var(--expense-red);
+            font-family: var(--font-heading);
+        }
+
+        /* Mobile card view for table */
+        .mobile-cards {
+            display: none;
+        }
+
+        .expense-card {
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .expense-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .expense-card-desc {
+            font-weight: 500;
+            color: var(--text-primary);
+            flex: 1;
+            margin-right: 12px;
+        }
+
+        .expense-card-cost {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            color: var(--expense-red);
+            font-size: 1.1rem;
+        }
+
+        .expense-card-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .expense-card-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* ==================== Responsive Breakpoints ==================== */
+        
+        /* Large tablets and small desktops */
+        @media (max-width: 1024px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Tablets */
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .filters-content {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .filter-group input[type="text"],
+            .multi-select,
+            .multi-select-btn {
+                width: 100%;
+                min-width: unset;
+            }
+
+            button.reset-btn {
+                width: 100%;
+            }
+
+            .chart-box {
+                min-height: 350px;
+            }
+        }
+
+        /* Mobile phones */
+        @media (max-width: 480px) {
+            body {
+                padding: 12px;
+            }
+
+            .kpi-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .kpi-card {
+                padding: 16px;
+            }
+
+            .kpi-value {
+                font-size: 1.4rem;
+            }
+
+            .kpi-label {
+                font-size: 0.7rem;
+            }
+
+            /* Hide desktop table, show cards */
+            .table-scroll {
+                display: none;
+            }
+
+            .mobile-cards {
+                display: block;
+            }
+
+            .table-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stats {
+                text-align: center;
+            }
+
+            button.download-btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            /* Collapsed filters by default on mobile */
+            .filters-section.mobile-collapsed .filters-content {
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ title }}</h1>
+            <p class="subtitle">Track and understand where your money goes</p>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid" id="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Total Spent</div>
+                <div class="kpi-value" id="kpi-total">€0</div>
+                <div class="kpi-sub" id="kpi-total-sub">in selected period</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Monthly Average</div>
+                <div class="kpi-value" id="kpi-avg">€0</div>
+                <div class="kpi-sub" id="kpi-avg-sub">per month</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Top Category</div>
+                <div class="kpi-value" id="kpi-category">-</div>
+                <div class="kpi-sub" id="kpi-category-sub">highest spending</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Transactions</div>
+                <div class="kpi-value" id="kpi-count">0</div>
+                <div class="kpi-sub" id="kpi-count-sub">expenses recorded</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="section">
+            <div class="filters-section" id="filters-section">
+                <div class="filters-header" onclick="toggleFilters()">
+                    <div class="filters-toggle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                        <span>Filters</span>
+                    </div>
+                    <span class="filter-summary" id="filter-summary" style="font-size: 0.8rem; color: var(--text-muted);">Last 12 months</span>
+                </div>
+                <div class="filters-content">
+                    <div class="filter-group">
+                        <label>Month</label>
+                        <div class="multi-select" id="month-select">
+                            <div class="multi-select-btn" onclick="toggleDropdown(event, 'month-select')">
+                                <span>Last 12 months</span>
+                            </div>
+                            <div class="multi-select-dropdown">
+                                <div class="multi-select-actions">
+                                    <a onclick="selectAll('month-select')">Select All</a>
+                                    <a onclick="clearAll('month-select')">Clear All</a>
+                                </div>
+                                <div class="multi-select-options"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Category</label>
+                        <div class="multi-select" id="category-select">
+                            <div class="multi-select-btn" onclick="toggleDropdown(event, 'category-select')">
+                                <span>All Categories</span>
+                            </div>
+                            <div class="multi-select-dropdown">
+                                <div class="multi-select-actions">
+                                    <a onclick="selectAll('category-select')">Select All</a>
+                                    <a onclick="clearAll('category-select')">Clear All</a>
+                                </div>
+                                <div class="multi-select-options"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <input type="text" id="search-filter" placeholder="Type to find an expense...">
+                    </div>
+                    <button class="reset-btn" onclick="resetFilters()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">Spending Overview</div>
+                <div class="section-desc">Hover over any bar to see the top 5 expenses</div>
+            </div>
+            <div class="charts-container">
+                <div class="chart-box">
+                    <div class="chart-title">Monthly Spending</div>
+                    <div class="chart-desc">Your total expenses month by month</div>
+                    <div id="monthly-chart"></div>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">Spending by Category</div>
+                    <div class="chart-desc">Where your money goes across categories</div>
+                    <div id="category-chart"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">All Expenses</div>
+                <div class="section-desc">Complete list of your expenses</div>
+            </div>
+            <div class="table-container">
+                <div class="table-header">
+                    <div class="stats" id="stats"></div>
+                    <button class="download-btn" onclick="downloadCSV()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download CSV
+                    </button>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Cost</th>
+                                <th>Currency</th>
+                                <th>Category</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenses-table"></tbody>
+                    </table>
+                </div>
+                <div class="mobile-cards" id="mobile-cards"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data injected from Python via Jinja2
+        const allData = {{ table_data }};
+        const allMonths = {{ months }};
+        const allCategories = {{ categories }};
+        const defaultMonths = {{ last_12_months }};
+
+        // ==================== Formatting Functions ====================
+
+        function formatCurrency(amount) {
+            return '€' + Math.round(amount).toLocaleString('de-DE');
+        }
+
+        // ==================== KPI Functions ====================
+
+        function updateKPIs(data) {
+            const total = data.reduce((sum, row) => sum + (row.cost || 0), 0);
+            const uniqueMonths = [...new Set(data.map(row => row.month_str))];
+            const monthCount = uniqueMonths.length || 1;
+            const avg = total / monthCount;
+
+            // Top category
+            const catTotals = {};
+            data.forEach(row => {
+                const cat = row.category_name || 'Unknown';
+                catTotals[cat] = (catTotals[cat] || 0) + (row.cost || 0);
+            });
+            const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+
+            document.getElementById('kpi-total').textContent = formatCurrency(total);
+            document.getElementById('kpi-total-sub').textContent = `across ${monthCount} month${monthCount !== 1 ? 's' : ''}`;
+
+            document.getElementById('kpi-avg').textContent = formatCurrency(avg);
+            document.getElementById('kpi-avg-sub').textContent = 'per month';
+
+            document.getElementById('kpi-category').textContent = topCat ? topCat[0] : '-';
+            document.getElementById('kpi-category-sub').textContent = topCat ? formatCurrency(topCat[1]) : 'no data';
+
+            document.getElementById('kpi-count').textContent = data.length.toLocaleString();
+            document.getElementById('kpi-count-sub').textContent = 'expenses recorded';
+        }
+
+        // ==================== Filter Toggle ====================
+
+        function toggleFilters() {
+            const section = document.getElementById('filters-section');
+            section.classList.toggle('collapsed');
+        }
+
+        // Collapse filters on mobile by default
+        if (window.innerWidth <= 480) {
+            document.getElementById('filters-section').classList.add('collapsed');
+        }
+
+        // ==================== Chart Functions ====================
+
+        const chartLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#94a3b8', family: 'Inter, sans-serif' },
+            margin: { t: 20, b: 80, l: 60, r: 20 },
+            height: 320,
+            xaxis: {
+                tickangle: 45,
+                tickfont: { size: 11 },
+                gridcolor: '#334155',
+                linecolor: '#334155'
+            },
+            yaxis: {
+                title: 'Total (€)',
+                gridcolor: '#334155',
+                linecolor: '#334155'
+            }
+        };
+
+        const chartConfig = { responsive: true, displayModeBar: false };
+
+        function aggregateByMonth(data) {
+            const grouped = {};
+            data.forEach(row => {
+                const month = row.month_str;
+                if (!grouped[month]) {
+                    grouped[month] = { total: 0, expenses: [] };
+                }
+                grouped[month].total += row.cost || 0;
+                grouped[month].expenses.push(row);
+            });
+
+            const months = Object.keys(grouped).sort();
+            const totals = months.map(m => grouped[m].total);
+            const top5Hover = months.map(m => {
+                const sorted = grouped[m].expenses.sort((a, b) => b.cost - a.cost).slice(0, 5);
+                return sorted.map(e => `${(e.description || '').slice(0, 25)}: ${formatCurrency(e.cost)}`).join('<br>');
+            });
+
+            return { months, totals, top5Hover };
+        }
+
+        function aggregateByCategory(data) {
+            const grouped = {};
+            data.forEach(row => {
+                const cat = row.category_name || 'Unknown';
+                if (!grouped[cat]) {
+                    grouped[cat] = { total: 0, expenses: [] };
+                }
+                grouped[cat].total += row.cost || 0;
+                grouped[cat].expenses.push(row);
+            });
+
+            const sorted = Object.entries(grouped).sort((a, b) => b[1].total - a[1].total);
+            const categories = sorted.map(([cat]) => cat);
+            const totals = sorted.map(([, data]) => data.total);
+            const top5Hover = sorted.map(([, data]) => {
+                const sortedExp = data.expenses.sort((a, b) => b.cost - a.cost).slice(0, 5);
+                return sortedExp.map(e => `${(e.description || '').slice(0, 25)}: ${formatCurrency(e.cost)}`).join('<br>');
+            });
+
+            return { categories, totals, top5Hover };
+        }
+
+        function renderMonthlyChart(data) {
+            const { months, totals, top5Hover } = aggregateByMonth(data);
+
+            const trace = {
+                x: months,
+                y: totals,
+                type: 'bar',
+                text: totals.map(t => formatCurrency(t)),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 },
+                hovertemplate: months.map((m, i) =>
+                    `<b>${m}</b><br>Total: ${formatCurrency(totals[i])}<br><br><b>Top 5:</b><br>${top5Hover[i]}<extra></extra>`
+                ),
+                marker: {
+                    color: '#60a5fa',
+                    line: { width: 0 }
+                }
+            };
+
+            Plotly.react('monthly-chart', [trace], { ...chartLayout }, chartConfig);
+        }
+
+        function renderCategoryChart(data) {
+            const { categories, totals, top5Hover } = aggregateByCategory(data);
+
+            const trace = {
+                x: categories,
+                y: totals,
+                type: 'bar',
+                text: totals.map(t => formatCurrency(t)),
+                textposition: 'outside',
+                textfont: { color: '#94a3b8', size: 10 },
+                hovertemplate: categories.map((c, i) =>
+                    `<b>${c}</b><br>Total: ${formatCurrency(totals[i])}<br><br><b>Top 5:</b><br>${top5Hover[i]}<extra></extra>`
+                ),
+                marker: {
+                    color: '#fb923c',
+                    line: { width: 0 }
+                }
+            };
+
+            const layout = {
+                ...chartLayout,
+                margin: { ...chartLayout.margin, b: 100 },
+                xaxis: { ...chartLayout.xaxis, type: 'category' }
+            };
+            Plotly.react('category-chart', [trace], layout, chartConfig);
+        }
+
+        // ==================== Multi-Select Functions ====================
+
+        function initMultiSelect(containerId, options, fieldName, preselected = []) {
+            const container = document.getElementById(containerId);
+            const optionsDiv = container.querySelector('.multi-select-options');
+
+            optionsDiv.innerHTML = options.map(opt => `
+                <label class="multi-select-option">
+                    <input type="checkbox" value="${opt}" data-field="${fieldName}"
+                           ${preselected.includes(opt) ? 'checked' : ''} onchange="applyFilters()">
+                    ${opt}
+                </label>
+            `).join('');
+        }
+
+        function toggleDropdown(event, containerId) {
+            event.stopPropagation();
+            const container = document.getElementById(containerId);
+            const dropdown = container.querySelector('.multi-select-dropdown');
+
+            document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
+                if (d !== dropdown) d.classList.remove('open');
+            });
+
+            dropdown.classList.toggle('open');
+        }
+
+        function getSelectedValues(containerId) {
+            const container = document.getElementById(containerId);
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function updateButtonText(containerId, allLabel, defaultLabel = null, defaultValues = []) {
+            const container = document.getElementById(containerId);
+            const btn = container.querySelector('.multi-select-btn span');
+            const selected = getSelectedValues(containerId);
+
+            if (selected.length === 0) {
+                btn.textContent = allLabel;
+            } else if (defaultLabel && selected.length === defaultValues.length &&
+                       selected.every(v => defaultValues.includes(v))) {
+                btn.textContent = defaultLabel;
+            } else if (selected.length === 1) {
+                btn.textContent = selected[0];
+            } else {
+                btn.textContent = `${selected.length} selected`;
+            }
+        }
+
+        function selectAll(containerId) {
+            const container = document.getElementById(containerId);
+            container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            applyFilters();
+        }
+
+        function clearAll(containerId) {
+            const container = document.getElementById(containerId);
+            container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            applyFilters();
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.multi-select')) {
+                document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
+                    d.classList.remove('open');
+                });
+            }
+        });
+
+        // ==================== Table Functions ====================
+
+        function renderTable(data) {
+            const tbody = document.getElementById('expenses-table');
+            const mobileCards = document.getElementById('mobile-cards');
+            const stats = document.getElementById('stats');
+
+            const total = data.reduce((sum, row) => sum + (row.cost || 0), 0);
+            stats.textContent = `${data.length} expenses · ${formatCurrency(total)}`;
+
+            // Desktop table
+            tbody.innerHTML = data.map(row => `
+                <tr>
+                    <td>${row.date || ''}</td>
+                    <td>${row.description || ''}</td>
+                    <td class="cost">${formatCurrency(row.cost || 0)}</td>
+                    <td>${row.currency_code || ''}</td>
+                    <td>${row.category_name || ''}</td>
+                </tr>
+            `).join('');
+
+            // Mobile cards
+            mobileCards.innerHTML = data.map(row => `
+                <div class="expense-card">
+                    <div class="expense-card-header">
+                        <div class="expense-card-desc">${row.description || ''}</div>
+                        <div class="expense-card-cost">${formatCurrency(row.cost || 0)}</div>
+                    </div>
+                    <div class="expense-card-meta">
+                        <span>${row.date || ''}</span>
+                        <span>${row.category_name || ''}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ==================== Download Functions ====================
+
+        function downloadCSV() {
+            const filtered = getFilteredData();
+            const headers = ['Date', 'Description', 'Cost', 'Currency', 'Category'];
+            const rows = filtered.map(row => [
+                row.date || '',
+                `"${(row.description || '').replace(/"/g, '""')}"`,
+                row.cost || 0,
+                row.currency_code || '',
+                row.category_name || ''
+            ]);
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const today = new Date().toISOString().split('T')[0];
+            const filename = `{{ title | lower | replace(' ', '_') }}_${today}.csv`;
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        // ==================== Filter & Render ====================
+
+        function getFilteredData() {
+            const selectedMonths = getSelectedValues('month-select');
+            const selectedCategories = getSelectedValues('category-select');
+            const searchFilter = document.getElementById('search-filter').value.toLowerCase();
+
+            let filtered = allData;
+
+            if (selectedMonths.length > 0) {
+                filtered = filtered.filter(row => selectedMonths.includes(row.month_str));
+            }
+            if (selectedCategories.length > 0) {
+                filtered = filtered.filter(row => selectedCategories.includes(row.category_name));
+            }
+            if (searchFilter) {
+                filtered = filtered.filter(row =>
+                    (row.description || '').toLowerCase().includes(searchFilter)
+                );
+            }
+
+            return filtered;
+        }
+
+        function updateFilterSummary() {
+            const selectedMonths = getSelectedValues('month-select');
+            const selectedCategories = getSelectedValues('category-select');
+            const searchFilter = document.getElementById('search-filter').value;
+
+            let parts = [];
+
+            if (selectedMonths.length === 0) {
+                parts.push('All months');
+            } else if (selectedMonths.length === defaultMonths.length &&
+                       selectedMonths.every(v => defaultMonths.includes(v))) {
+                parts.push('Last 12 months');
+            } else {
+                parts.push(`${selectedMonths.length} month${selectedMonths.length !== 1 ? 's' : ''}`);
+            }
+
+            if (selectedCategories.length > 0) {
+                parts.push(`${selectedCategories.length} categor${selectedCategories.length !== 1 ? 'ies' : 'y'}`);
+            }
+
+            if (searchFilter) {
+                parts.push(`"${searchFilter}"`);
+            }
+
+            document.getElementById('filter-summary').textContent = parts.join(' · ');
+        }
+
+        function applyFilters() {
+            updateButtonText('month-select', 'All Months', 'Last 12 months', defaultMonths);
+            updateButtonText('category-select', 'All Categories');
+            updateFilterSummary();
+
+            const filtered = getFilteredData();
+
+            updateKPIs(filtered);
+            renderMonthlyChart(filtered);
+            renderCategoryChart(filtered);
+            renderTable(filtered);
+        }
+
+        function resetFilters() {
+            const monthContainer = document.getElementById('month-select');
+            monthContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = defaultMonths.includes(cb.value);
+            });
+
+            clearAll('category-select');
+            document.getElementById('search-filter').value = '';
+
+            applyFilters();
+        }
+
+        // ==================== Initialize ====================
+
+        document.getElementById('search-filter').addEventListener('input', applyFilters);
+
+        initMultiSelect('month-select', allMonths, 'month_str', defaultMonths);
+        initMultiSelect('category-select', allCategories, 'category_name');
+
+        applyFilters();
+    </script>
+</body>
+</html>

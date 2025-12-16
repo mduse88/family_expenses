@@ -158,6 +158,7 @@ output/
 # Firebase
 .firebase/
 firebase_public/dashboard.html
+.firebaserc
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

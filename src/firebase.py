@@ -117,9 +117,13 @@ def deploy() -> str | None:
     """
     # Check for Firebase token (for CI) or assume logged in locally
     firebase_token = os.getenv("FIREBASE_TOKEN")
+    # Check for project ID (for CI where .firebaserc is gitignored)
+    firebase_project = os.getenv("FIREBASE_PROJECT_ID")
     
     # Build base command
     cmd_parts = ["firebase", "deploy", "--only", "hosting"]
+    if firebase_project:
+        cmd_parts.extend(["--project", firebase_project])
     if firebase_token:
         cmd_parts.extend(["--token", firebase_token])
     

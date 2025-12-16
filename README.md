@@ -171,8 +171,8 @@ sequenceDiagram
 **1. Clone this repository**
 
 ```bash
-git clone https://github.com/mduse88/family_expenses.git
-cd family_expenses
+git clone https://github.com/mduse88/splitwise-free-analytics.git
+cd splitwise-free-analytics
 ```
 
 **2. Create a virtual environment and install dependencies**

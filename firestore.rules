@@ -1,10 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Dashboard encryption key - only authenticated users can read
-    // Write access is denied (only server-side admin SDK can write)
+    // Dashboard encryption key - only authorized users can read
+    // Security: Checks if authenticated user's email is in the authorizedEmails array
+    // This is server-side enforcement - cannot be bypassed from client
     match /config/dashboard {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null 
+                  && request.auth.token.email in resource.data.authorizedEmails;
       allow write: if false;
     }
     

@@ -43,15 +43,17 @@ def _init_firebase_admin():
         return False
 
 
-def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str]) -> bool:
+def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str], allowed_emails: list[str]) -> bool:
     """Store encryption key in Firestore.
     
     Security: The key is stored in Firestore, not in the page source.
-    Only authenticated users can fetch the key via Firestore security rules.
+    Firestore security rules check authorizedEmails to ensure only
+    authorized users can fetch the key - this is server-side enforcement.
     
     Args:
         key_hex: Hex-encoded AES-256 key.
-        allowed_hashes: List of authorized email hashes.
+        allowed_hashes: List of authorized email hashes (for client-side display).
+        allowed_emails: List of authorized emails (for Firestore rule validation).
         
     Returns:
         True if stored successfully, False otherwise.
@@ -64,6 +66,7 @@ def _store_key_in_firestore(key_hex: str, allowed_hashes: list[str]) -> bool:
         doc_ref.set({
             "encryptionKey": key_hex,
             "authorizedHashes": allowed_hashes,
+            "authorizedEmails": allowed_emails,  # Used by Firestore rules for auth
             "updatedAt": firestore.SERVER_TIMESTAMP,
         })
         log_verbose("Encryption key stored in Firestore")
@@ -89,6 +92,19 @@ def hash_email(email: str) -> str:
     return hashlib.sha256(email.lower().strip().encode()).hexdigest()
 
 
+def get_allowed_emails() -> list[str]:
+    """Get list of allowed emails from RECIPIENT_EMAIL config.
+    
+    Returns:
+        List of normalized (lowercase, trimmed) email addresses.
+    """
+    if not email_config.recipient_email:
+        return []
+    
+    emails = [e.strip().lower() for e in email_config.recipient_email.split(",")]
+    return [e for e in emails if e]  # Filter out empty strings
+
+
 def get_allowed_email_hashes() -> list[str]:
     """Get list of SHA-256 hashes of allowed emails from RECIPIENT_EMAIL config.
     
@@ -98,12 +114,7 @@ def get_allowed_email_hashes() -> list[str]:
     Returns:
         List of SHA-256 hashes of email addresses.
     """
-    if not email_config.recipient_email:
-        return []
-    
-    emails = [e.strip().lower() for e in email_config.recipient_email.split(",")]
-    emails = [e for e in emails if e]  # Filter out empty strings
-    return [hash_email(e) for e in emails]
+    return [hash_email(e) for e in get_allowed_emails()]
 
 
 def encrypt_dashboard_with_random_key(html: str) -> tuple[str, str]:
@@ -162,9 +173,10 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         log_info("ERROR: firebase_public/index.html not found")
         return False
     
-    # Get allowed email hashes (PII protection: no plaintext emails in deployed code)
-    allowed_hashes = get_allowed_email_hashes()
-    if not allowed_hashes:
+    # Get allowed emails and hashes
+    allowed_emails = get_allowed_emails()
+    allowed_hashes = [hash_email(e) for e in allowed_emails]
+    if not allowed_emails:
         log_verbose("WARNING: No allowed emails configured (RECIPIENT_EMAIL)")
     
     # Read dashboard HTML and encrypt with random key
@@ -180,7 +192,7 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         return False
     
     # Store encryption key in Firestore (secure, requires auth to access)
-    if not _store_key_in_firestore(key_hex, allowed_hashes):
+    if not _store_key_in_firestore(key_hex, allowed_hashes, allowed_emails):
         log_info("WARNING: Failed to store key in Firestore - falling back to page source")
         # Fallback: embed key in page (less secure but still works)
         key_in_page = f'"{key_hex}"'

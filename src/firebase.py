@@ -1,6 +1,7 @@
 """Firebase Hosting deployment module."""
 
 import base64
+import hashlib
 import os
 import re
 import subprocess
@@ -9,17 +10,37 @@ from src.config import email as email_config
 from src.logging_utils import log_info, log_verbose, log_error
 
 
-def get_allowed_emails() -> list[str]:
-    """Get list of allowed emails from RECIPIENT_EMAIL config.
+def hash_email(email: str) -> str:
+    """Hash an email address using SHA-256.
+    
+    Security: Hashing prevents PII exposure in deployed code.
+    Even if someone views page source, they cannot reverse the hash
+    to discover email addresses.
+    
+    Args:
+        email: Email address to hash.
+        
+    Returns:
+        SHA-256 hex digest of the lowercase, trimmed email.
+    """
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()
+
+
+def get_allowed_email_hashes() -> list[str]:
+    """Get list of SHA-256 hashes of allowed emails from RECIPIENT_EMAIL config.
+    
+    Security: Returns hashes instead of plaintext emails to prevent
+    PII exposure in the deployed Firebase page.
     
     Returns:
-        List of lowercase email addresses.
+        List of SHA-256 hashes of email addresses.
     """
     if not email_config.recipient_email:
         return []
     
     emails = [e.strip().lower() for e in email_config.recipient_email.split(",")]
-    return [e for e in emails if e]  # Filter out empty strings
+    emails = [e for e in emails if e]  # Filter out empty strings
+    return [hash_email(e) for e in emails]
 
 
 def prepare_deployment(dashboard_html_path: str) -> bool:
@@ -56,19 +77,19 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         log_error("ERROR: Failed to read dashboard", str(e))
         return False
     
-    # Get allowed emails
-    allowed_emails = get_allowed_emails()
-    if not allowed_emails:
+    # Get allowed email hashes (PII protection: no plaintext emails in deployed code)
+    allowed_hashes = get_allowed_email_hashes()
+    if not allowed_hashes:
         log_verbose("WARNING: No allowed emails configured (RECIPIENT_EMAIL)")
     
-    # Read index.html and inject both dashboard data and allowed emails
+    # Read index.html and inject both dashboard data and allowed email hashes
     try:
         with open(index_html_path, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # Replace placeholders
-        emails_json = json.dumps(allowed_emails)
-        content = content.replace("__ALLOWED_EMAILS_PLACEHOLDER__", emails_json)
+        # Replace placeholders (hashes instead of plaintext emails for security)
+        hashes_json = json.dumps(allowed_hashes)
+        content = content.replace("__ALLOWED_HASHES_PLACEHOLDER__", hashes_json)
         content = content.replace("__DASHBOARD_DATA_PLACEHOLDER__", dashboard_base64)
         
         with open(index_html_path, "w", encoding="utf-8") as f:
@@ -197,6 +218,8 @@ def restore_index_html() -> None:
         #sign-in-btn:hover { background: #3367d6; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(66, 133, 244, 0.5); }
         .google-icon { width: 20px; height: 20px; background: white; border-radius: 4px; padding: 2px; }
         #login-container #error { color: #dc3545; font-size: 14px; margin-top: 20px; padding: 12px; background: #fff5f5; border-radius: 8px; display: none; }
+        #sign-out-btn { display: none; margin-top: 16px; background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: background 0.2s ease; }
+        #sign-out-btn:hover { background: #5a6268; }
         #login-container #loading { color: #666; font-size: 14px; margin-top: 20px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #ccc; border-top-color: #4285f4; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 8px; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -216,17 +239,36 @@ def restore_index_html() -> None:
             Sign in with Google
         </button>
         <div id="error"></div>
+        <button id="sign-out-btn" onclick="signOut()">Try a different account</button>
         <div id="loading" class="hidden"><span class="spinner"></span>Checking authorization...</div>
     </div>
     <div id="dashboard-container"></div>
     <script id="dashboard-data" type="text/plain">__DASHBOARD_DATA_PLACEHOLDER__</script>
     <script>
-        const ALLOWED_EMAILS = __ALLOWED_EMAILS_PLACEHOLDER__;
+        // Security: Store hashes instead of plaintext emails to prevent PII exposure
+        const ALLOWED_HASHES = __ALLOWED_HASHES_PLACEHOLDER__;
+        
+        // Hash email using SHA-256 (matches server-side hashing)
+        async function hashEmail(email) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(email.toLowerCase().trim());
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        
         function signIn() {
             const provider = new firebase.auth.GoogleAuthProvider();
             firebase.auth().signInWithPopup(provider).catch(error => { showError('Sign-in failed: ' + error.message); });
         }
-        function showError(message) { const errorEl = document.getElementById('error'); errorEl.textContent = message; errorEl.style.display = 'block'; document.getElementById('loading').classList.add('hidden'); }
+        function signOut() { firebase.auth().signOut(); }
+        function showError(message, showSignOut = false) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('sign-out-btn').style.display = showSignOut ? 'inline-block' : 'none';
+        }
         function showDashboard() {
             const encodedData = document.getElementById('dashboard-data').textContent.trim();
             if (encodedData && !encodedData.includes('PLACEHOLDER')) {
@@ -261,18 +303,20 @@ def restore_index_html() -> None:
         }
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
-                firebase.auth().onAuthStateChanged(user => {
+                firebase.auth().onAuthStateChanged(async user => {
                     if (user) {
                         document.getElementById('loading').classList.remove('hidden');
                         document.getElementById('sign-in-btn').classList.add('hidden');
-                        if (ALLOWED_EMAILS.includes(user.email.toLowerCase())) { showDashboard(); }
-                        else { showError('Access denied. Your email (' + user.email + ') is not authorized.'); firebase.auth().signOut(); }
+                        const userHash = await hashEmail(user.email);
+                        if (ALLOWED_HASHES.includes(userHash)) { showDashboard(); }
+                        else { showError('Access denied. Your account is not authorized.', true); }
                     } else {
                         document.body.classList.remove('authenticated');
                         document.getElementById('login-container').classList.remove('hidden');
                         document.getElementById('sign-in-btn').classList.remove('hidden');
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('error').style.display = 'none';
+                        document.getElementById('sign-out-btn').style.display = 'none';
                     }
                 });
             }, 500);

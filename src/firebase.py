@@ -191,14 +191,16 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         log_error("ERROR: Failed to encrypt dashboard", str(e))
         return False
     
-    # Store encryption key in Firestore (secure, requires auth to access)
+    # Store encryption key in Firestore (required)
+    #
+    # Security: We must NEVER embed the key in the page source. If Firestore storage fails,
+    # we abort deployment to prevent accidental plaintext-key exposure.
     if not _store_key_in_firestore(key_hex, allowed_hashes, allowed_emails):
-        log_info("WARNING: Failed to store key in Firestore - falling back to page source")
-        # Fallback: embed key in page (less secure but still works)
-        key_in_page = f'"{key_hex}"'
-    else:
-        # Key is in Firestore - use placeholder that JS will fetch
-        key_in_page = "null"
+        log_error(
+            "ERROR: Failed to store key in Firestore. Refusing to deploy without Firestore-backed key.",
+            "Check FIREBASE_SERVICE_ACCOUNT / Firestore setup / permissions."
+        )
+        return False
     
     # Read index.html and inject encrypted dashboard and allowed hashes
     try:
@@ -208,7 +210,6 @@ def prepare_deployment(dashboard_html_path: str) -> bool:
         # Replace placeholders
         hashes_json = json.dumps(allowed_hashes)
         content = content.replace("__ALLOWED_HASHES_PLACEHOLDER__", hashes_json)
-        content = content.replace("__ENCRYPTION_KEY_PLACEHOLDER__", key_in_page)
         content = content.replace("__DASHBOARD_DATA_PLACEHOLDER__", encrypted_hex)
         
         with open(index_html_path, "w", encoding="utf-8") as f:
@@ -371,8 +372,6 @@ def restore_index_html() -> None:
     <script>
         // Security: Store hashes for client-side auth check
         const ALLOWED_HASHES = __ALLOWED_HASHES_PLACEHOLDER__;
-        // Fallback key (null if key is in Firestore, hex string if fallback)
-        const FALLBACK_KEY = __ENCRYPTION_KEY_PLACEHOLDER__;
         
         // Hash email using SHA-256 (matches server-side hashing)
         async function hashEmail(email) {
@@ -452,13 +451,10 @@ def restore_index_html() -> None:
             const encryptedData = document.getElementById('dashboard-data').textContent.trim();
             if (encryptedData && !encryptedData.includes('PLACEHOLDER')) {
                 try {
-                    // Get encryption key (from Firestore or fallback)
-                    let keyHex = FALLBACK_KEY;
+                    // Get encryption key from Firestore (required)
+                    const keyHex = await fetchKeyFromFirestore();
                     if (!keyHex) {
-                        keyHex = await fetchKeyFromFirestore();
-                        if (!keyHex) {
-                            throw new Error('Could not retrieve encryption key');
-                        }
+                        throw new Error('Could not retrieve encryption key');
                     }
                     
                     // Decrypt the dashboard using AES-GCM

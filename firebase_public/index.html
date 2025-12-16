@@ -49,8 +49,6 @@
     <script>
         // Security: Store hashes for client-side auth check
         const ALLOWED_HASHES = __ALLOWED_HASHES_PLACEHOLDER__;
-        // Fallback key (null if key is in Firestore, hex string if fallback)
-        const FALLBACK_KEY = __ENCRYPTION_KEY_PLACEHOLDER__;
         
         // Hash email using SHA-256 (matches server-side hashing)
         async function hashEmail(email) {
@@ -130,13 +128,10 @@
             const encryptedData = document.getElementById('dashboard-data').textContent.trim();
             if (encryptedData && !encryptedData.includes('PLACEHOLDER')) {
                 try {
-                    // Get encryption key (from Firestore or fallback)
-                    let keyHex = FALLBACK_KEY;
+                    // Get encryption key from Firestore (required)
+                    const keyHex = await fetchKeyFromFirestore();
                     if (!keyHex) {
-                        keyHex = await fetchKeyFromFirestore();
-                        if (!keyHex) {
-                            throw new Error('Could not retrieve encryption key');
-                        }
+                        throw new Error('Could not retrieve encryption key');
                     }
                     
                     // Decrypt the dashboard using AES-GCM

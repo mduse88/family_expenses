@@ -1099,7 +1099,6 @@
                                 <th>Date</th>
                                 <th>Description</th>
                                 <th>Cost</th>
-                                <th>Currency</th>
                                 <th>Category</th>
                             </tr>
                         </thead>
@@ -1415,7 +1414,6 @@
                     <td>${row.date || ''}</td>
                     <td>${row.description || ''}</td>
                     <td class="cost">${formatCurrency(row.cost || 0)}</td>
-                    <td>${row.currency_code || ''}</td>
                     <td>${row.category_name || ''}</td>
                 </tr>
             `).join('');
@@ -1477,12 +1475,11 @@
 
         function downloadCSV() {
             const filtered = getFilteredData();
-            const headers = ['Date', 'Description', 'Cost', 'Currency', 'Category'];
+            const headers = ['Date', 'Description', 'Cost', 'Category'];
             const rows = filtered.map(row => [
                 row.date || '',
                 `"${(row.description || '').replace(/"/g, '""')}"`,
                 row.cost || 0,
-                row.currency_code || '',
                 row.category_name || ''
             ]);
 

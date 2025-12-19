@@ -70,3 +70,13 @@ email = EmailConfig(
     recipient_email=os.getenv("RECIPIENT_EMAIL"),
 )
 
+
+def set_recipient_email(value: str) -> None:
+    """Override recipient_email at runtime."""
+    global email
+    email = EmailConfig(
+        gmail_address=email.gmail_address,
+        gmail_app_password=email.gmail_app_password,
+        recipient_email=value,
+    )
+

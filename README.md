@@ -481,19 +481,20 @@ RECIPIENT_EMAIL=recipient1@email.com,recipient2@email.com
 | Command | Description |
 |---------|-------------|
 | `python family_expenses.py` | Fetch fresh data from Splitwise, upload to Google Drive |
-| `python family_expenses.py --email` | Same as above, plus send an email report |
+| `python family_expenses.py --email` | Same as above, plus send email to default recipients |
+| `python family_expenses.py --email "a@x.com,b@x.com"` | Same as above, send email to specified recipients |
 | `python family_expenses.py --local` | Use cached data, save to `output/`, upload to Google Drive |
 | `python family_expenses.py --local --email` | Same as above, plus send an email report |
 | `python family_expenses.py --full-log` | Enable verbose logging for troubleshooting |
 
-You can combine flags: `python family_expenses.py --local --email --full-log`
+You can combine flags: `python family_expenses.py --local --email "user@gmail.com" --full-log`
 
 ### CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--local` | off | Use cached data (Drive → output/ → API) and save files to `output/` |
-| `--email` | off | Send email summary with Firebase dashboard link |
+| `--email [RECIPIENTS]` | off | Send email; optionally specify recipients (comma-separated) |
 | `--full-log` | off | Enable verbose logging |
 
 **Google Drive upload** always happens when configured (for backup).
@@ -553,6 +554,7 @@ You can trigger the workflow at any time:
 1. Go to **Actions** → **Monthly Expense Report** → **Run workflow**
 2. Configure options:
    - **Send email notification** — enabled by default
+   - **Override recipients** — leave empty to use default from `RECIPIENT_EMAIL`
 3. Click **Run workflow**
 
 > **Tip:** Disable email notification when testing to avoid unnecessary emails.

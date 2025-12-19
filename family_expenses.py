@@ -17,7 +17,7 @@ import pandas as pd
 
 from src import splitwise_client, dashboard, gdrive, email_sender, stats, firebase
 from src.config import app as app_config
-from src.config import gdrive as gdrive_config, email as email_config
+from src.config import gdrive as gdrive_config, email as email_config, set_recipient_email
 from src import logging_utils
 from src.logging_utils import log_info, log_verbose
 
@@ -43,13 +43,19 @@ Examples:
 
   # Any command with verbose logging
   python family_expenses.py --local --email --full-log
+
+  # Send email to specific recipients (overrides RECIPIENT_EMAIL)
+  python family_expenses.py --email "user@gmail.com,other@gmail.com"
         """,
     )
     
     parser.add_argument(
         "--email",
-        action="store_true",
-        help="Send email with monthly summary and Google Drive link",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="RECIPIENTS",
+        help="Send email. Optionally specify recipients (comma-separated), defaults to RECIPIENT_EMAIL env var.",
     )
     
     parser.add_argument(
@@ -196,6 +202,11 @@ def main() -> None:
     # Configure centralized verbose logging for all modules
     logging_utils.set_verbose(args.full_log)
     
+    # Apply recipient email override if provided with --email
+    if args.email is not None and args.email:
+        set_recipient_email(args.email)
+        log_verbose(f"Recipient emails overridden: {args.email}")
+    
     log_verbose(f"=== Starting {app_config.title} ===")
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
@@ -272,8 +283,8 @@ def main() -> None:
         else:
             log_verbose("Firebase deployment skipped or failed")
         
-        # Step 8: Send email (when --email flag is passed)
-        if args.email:
+        # Step 8: Send email (when --email is passed, with or without recipients)
+        if args.email is not None:
             if not email_config.is_configured:
                 log_verbose("Email not configured - skipping")
             elif firebase_url:

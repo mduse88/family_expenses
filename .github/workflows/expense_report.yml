@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: true
+      email_recipients:
+        description: 'Override recipients (comma-separated, leave empty for default)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   generate-and-send-report:
@@ -64,13 +69,17 @@ jobs:
         run: |
           ARGS=""
           
-          # Scheduled runs: always send email
+          # Scheduled runs: always send email (default recipients)
           if [ "${{ github.event_name }}" = "schedule" ]; then
             ARGS="--email"
           else
             # Manual runs: check send_email input
             if [ "${{ inputs.send_email }}" = "true" ]; then
-              ARGS="--email"
+              if [ -n "${{ inputs.email_recipients }}" ]; then
+                ARGS="--email '${{ inputs.email_recipients }}'"
+              else
+                ARGS="--email"
+              fi
             fi
           fi
           
